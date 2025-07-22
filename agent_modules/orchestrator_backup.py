@@ -59,42 +59,39 @@ class OrchestratorAgent:
             Dict: Streaming processing results
         """
         try:
-            # Step 1: Start processing
+            # Step 1: Stream scenario determination (hardcoded to detailed_jd)
             yield {
                 "event": "progress",
                 "data": {
-                    "step": "started",
-                    "message": "Starting job description analysis...",
-                    "progress": 5
-                }
-            }
-            
-            # Step 2: Parse job description with real-time result building
-            yield {
-                "event": "progress",
-                "data": {
-                    "step": "parsing",
-                    "message": "Analyzing job description...",
+                    "step": "analyzing",
+                    "message": "Analyzing input to determine processing scenario...",
                     "progress": 10
                 }
             }
             
-            # Initialize partial result
-            partial_result = {
-                "session_id": session_id or "",
-                "requirements": {
-                    "title": "",
-                    "description": "",
-                    "must_have": {
-                        "technical_skills": [],
-                        "domain_experience": [],
-                        "soft_skills": []
-                    },
-                    "nice_to_have": []
+            # Hardcode to detailed_jd scenario
+            scenario = "detailed_jd"
+            yield {
+                "event": "progress",
+                "data": {
+                    "step": "scenario_determined",
+                    "message": f"Scenario determined: {scenario}",
+                    "progress": 20,
+                    "scenario": scenario
                 }
             }
             
-            # Stream JD parsing with partial result updates
+            # Step 2: Process based on scenario (always detailed_jd)
+            yield {
+                "event": "progress",
+                "data": {
+                    "step": "parsing",
+                    "message": "Parsing detailed job description...",
+                    "progress": 30
+                }
+            }
+            
+            # Stream JD parsing
             parsed_data = {}
             async for parse_chunk in self.streaming_llm.stream_parse_job_description(user_input):
                 if parse_chunk["type"] == "section_complete":
@@ -102,51 +99,46 @@ class OrchestratorAgent:
                     content = parse_chunk["content"]
                     parsed_data[section] = content
                     
-                    # Update partial result based on section
-                    if section == "title":
-                        partial_result["requirements"]["title"] = content
-                    elif section == "description":
-                        partial_result["requirements"]["description"] = content
-                    elif section == "technical_skills":
-                        partial_result["requirements"]["must_have"]["technical_skills"] = content if isinstance(content, list) else []
-                    elif section == "domain_experience":
-                        partial_result["requirements"]["must_have"]["domain_experience"] = content if isinstance(content, list) else []
-                    elif section == "soft_skills":
-                        partial_result["requirements"]["must_have"]["soft_skills"] = content if isinstance(content, list) else []
-                    elif section == "nice_to_have":
-                        partial_result["requirements"]["nice_to_have"] = content if isinstance(content, list) else []
-                    
-                    # Yield partial result update
                     yield {
-                        "event": "partial_result",
+                        "event": "progress",
                         "data": {
                             "step": "parsing",
-                            "message": f"Completed analysis of {section}",
-                            "progress": 20 + (len(parsed_data) * 15),
-                            "partial_result": partial_result.copy(),
-                            "completed_section": section
+                            "message": parse_chunk["message"],
+                            "progress": 40 + (len(parsed_data) * 10),
+                            "parsed_section": section,
+                            "parsed_content": content
                         }
                     }
-                
+                elif parse_chunk["type"] == "content_chunk":
+                    yield {
+                        "event": "progress",
+                        "data": {
+                            "step": "parsing",
+                            "message": parse_chunk["message"],
+                            "progress": 35
+                        }
+                    }
                 elif parse_chunk["type"] == "analysis_complete":
                     yield {
                         "event": "progress",
                         "data": {
                             "step": "formatting",
-                            "message": "Finalizing results...",
-                            "progress": 90
+                            "message": "Formatting final results...",
+                            "progress": 80
                         }
                     }
                     break
             
-            # Final result
+            # Format final result
+            final_result = self._format_parsed_data(parsed_data, session_id)
+            
             yield {
                 "event": "complete",
                 "data": {
                     "step": "complete",
                     "message": "Job description processing completed",
                     "progress": 100,
-                    "result": partial_result
+                    "result": final_result
                 }
             }
                 
@@ -191,4 +183,4 @@ class OrchestratorAgent:
     
     def handoff_to_jd_parser(self, jd_text: str, session_id: str = None):
         """Handoff to JD parser agent"""
-        return self.jd_parser.parse_jd(jd_text, session_id)
+        return self.jd_parser.parse_jd(jd_text, session_id) 

@@ -29,8 +29,24 @@ class LLMTools:
         {user_input}
 
         Please determine:
-        1. If the input contains detailed job information (skills, experience, responsibilities, etc.), return "detailed_jd"
-        2. If the input lacks sufficient information or needs further inquiry, return "need_conversation"
+        1. If the input contains detailed job information including:
+           - Job title/position name
+           - Required skills (technical, soft skills, domain experience)
+           - Experience level or years of experience
+           - Responsibilities or job duties
+           - Any specific requirements or qualifications
+           Then return "detailed_jd"
+        
+        2. If the input is vague, incomplete, or only contains basic information like:
+           - Just a job title without details
+           - General statements without specific requirements
+           - Questions or requests for information
+           Then return "need_conversation"
+
+        Examples:
+        - "Senior Software Engineer with 5+ years Python, JavaScript, Docker, Kubernetes experience" -> "detailed_jd"
+        - "Software Engineer" -> "need_conversation"
+        - "I need a developer" -> "need_conversation"
 
         Return only one of the above options without any explanation.
         """
@@ -38,7 +54,7 @@ class LLMTools:
         response = self.client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
-                {"role": "system", "content": "You are a professional job description analyst."},
+                {"role": "system", "content": "You are a professional job description analyst. Your task is to determine if a job description is detailed enough for direct processing or needs further conversation to gather more information."},
                 {"role": "user", "content": prompt}
             ],
             temperature=TEMPERATURE,

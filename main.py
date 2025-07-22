@@ -2,13 +2,15 @@
 # Main entry point for job requirement generator
 
 import json
+import argparse
+import asyncio
 from agent_modules.orchestrator import OrchestratorAgent
 from utils.session_manager import SessionManager
+from api.server import run_server
+from tests.sse_client_test import SSETestClient
 
-def main():
-    """Main function"""
-    # API key is automatically loaded from .env file via config/settings.py
-    
+def run_cli_mode():
+    """Run in CLI mode for testing"""
     # Initialize session manager
     session_manager = SessionManager()
     
@@ -29,15 +31,27 @@ def main():
     print("=== Processing Detailed Job Description ===")
     result = orchestrator.process_input(jd_text)
     print(json.dumps(result, indent=2, ensure_ascii=False))
+
+async def run_test_mode():
+    """Run in test mode to test SSE API"""
+    print("=== Running SSE API Test ===")
+    test_client = SSETestClient()
+    await test_client.test_sse_connection()
+
+def main():
+    """Main function with CLI argument support"""
+    parser = argparse.ArgumentParser(description='Job Requirement Generator')
+    parser.add_argument('--mode', choices=['cli', 'api', 'test'], default='cli',
+                       help='Run mode: cli (command line), api (SSE server), or test (SSE client test)')
     
-    print("\n" + "="*50 + "\n")
+    args = parser.parse_args()
     
-    # Example usage - Scenario 2: Need conversation
-    short_input = "I need a software engineer"
-    
-    print("=== Processing Short Input (Need Conversation) ===")
-    result = orchestrator.process_input(short_input)
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    if args.mode == 'api':
+        run_server()
+    elif args.mode == 'test':
+        asyncio.run(run_test_mode())
+    else:
+        run_cli_mode()
 
 if __name__ == "__main__":
     main() 

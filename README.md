@@ -1,11 +1,12 @@
 # Job Requirement Generator
 
-A job requirement generation system built with OpenAI Agents framework.
+A job requirement generation system built with OpenAI Agents framework with SSE (Server-Sent Events) streaming support.
 
 ## Features
 
 - **Intelligent JD Parsing**: Uses LLM to parse detailed job descriptions into structured format
 - **Conversation Flow**: Guides users through questions when detailed JD is not available
+- **SSE Streaming API**: Real-time streaming of job requirement processing
 - **Modular Design**: Clean separation of concerns with multiple agents
 - **Environment-based Configuration**: Secure API key management via .env files
 
@@ -13,6 +14,10 @@ A job requirement generation system built with OpenAI Agents framework.
 
 ```
 job_requirement_generator/
+├── api/
+│   ├── __init__.py
+│   ├── sse_service.py      # FastAPI SSE service
+│   └── server.py           # FastAPI server
 ├── config/
 │   ├── __init__.py
 │   └── settings.py          # Configuration settings
@@ -27,6 +32,12 @@ job_requirement_generator/
 ├── utils/
 │   ├── __init__.py
 │   └── session_manager.py  # Session management
+├── tests/
+│   ├── __init__.py
+│   └── sse_client_test.py  # SSE client test
+├── scripts/
+│   ├── start_api.py        # API server startup script
+│   └── test_sse.py         # SSE test script
 ├── docs/
 │   └── scenario.md         # Scenario documentation
 ├── main.py                 # Main entry point
@@ -60,7 +71,7 @@ cp env.example .env
 
 ## Usage
 
-### Basic Usage
+### CLI Mode (Default)
 
 ```python
 from agent_modules.orchestrator import OrchestratorAgent
@@ -82,14 +93,106 @@ result = orchestrator.process_input(jd_text)
 print(json.dumps(result, indent=2))
 ```
 
-### Running the Example
+### SSE API Mode
+
+Start the FastAPI server:
 
 ```bash
-# Using uv
+# Using main.py
+uv run python main.py --mode api
+
+# Or using dedicated script
+uv run python scripts/start_api.py
+```
+
+The server will start on `http://localhost:8000` with the following endpoints:
+
+- `POST /api/process-jd` - Stream job description processing
+- `GET /api/health` - Health check
+- `GET /docs` - Interactive API documentation
+- `GET /redoc` - Alternative API documentation
+
+### Testing SSE API
+
+```bash
+# Using main.py
+uv run python main.py --mode test
+
+# Or using dedicated script
+uv run python scripts/test_sse.py
+```
+
+### Running Examples
+
+```bash
+# CLI mode (default)
 uv run main.py
 
-# Or using python directly
-python main.py
+# API server mode
+uv run main.py --mode api
+
+# Test SSE API mode
+uv run main.py --mode test
+```
+
+## API Usage
+
+### SSE Job Description Processing
+
+Send a POST request to `/api/process-jd` with JSON body:
+
+```json
+{
+    "jd_text": "Senior Software Engineer with 5+ years of experience in Python..."
+}
+```
+
+The response will be a Server-Sent Events stream with progress updates:
+
+```
+event: progress
+data: {"step": "analyzing", "message": "Analyzing job description...", "progress": 20}
+
+event: progress
+data: {"step": "parsing", "message": "Parsing job requirements...", "progress": 40}
+
+event: progress
+data: {"step": "extracting_skills", "message": "Extracting required skills...", "progress": 60}
+
+event: progress
+data: {"step": "formatting", "message": "Formatting results...", "progress": 80}
+
+event: complete
+data: {"step": "complete", "message": "Processing complete", "progress": 100, "result": {...}}
+```
+
+### Python Client Example
+
+```python
+import asyncio
+import aiohttp
+import json
+
+async def process_jd_sse(jd_text: str):
+    url = "http://localhost:8000/api/process-jd"
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream"
+    }
+    data = {"jd_text": jd_text}
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=data, headers=headers) as response:
+            async for line in response.content:
+                line = line.decode('utf-8').strip()
+                if line.startswith('data: '):
+                    data = json.loads(line[6:])
+                    print(f"Progress: {data.get('progress', 0)}% - {data.get('message', '')}")
+                    if data.get('step') == 'complete':
+                        return data.get('result')
+
+# Usage
+result = await process_jd_sse("Your job description here...")
 ```
 
 ## Configuration
@@ -98,8 +201,9 @@ The system uses environment variables for configuration:
 
 - `OPENAI_API_KEY`: Your OpenAI API key (required)
 - `MODEL_NAME`: OpenAI model to use (default: gpt-4)
-- `MAX_TOKENS`: Maximum tokens for responses (default: 2000)
-- `TEMPERATURE`: Response creativity (default: 0.1)
+- `HOST`: API server host (default: 0.0.0.0)
+- `PORT`: API server port (default: 8000)
+- `ENVIRONMENT`: Environment mode (development enables auto-reload)
 
 ## Architecture
 
